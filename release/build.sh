@@ -87,7 +87,7 @@ build_remote_macos ()
   SUFFIX=$1
   OUR_CXXFLAGS=$2
   FLAGS=$3
-  ssh deen@$MAC_HOST "export PATH=/opt/homebrew/bin:\$PATH:\$HOME/.cargo/bin && rm -rf macos$SUFFIX && \
+  ssh deen@$MAC_HOST "export PATH=/opt/homebrew/opt/rustup/bin:/opt/homebrew/bin:\$PATH:\$HOME/.cargo/bin && rm -rf macos$SUFFIX && \
   mkdir macos$SUFFIX && \
   cd macos$SUFFIX && \
   export MACOS_APP_IDENTITY=\"Developer ID Application: Dennis Felsing\" && \
@@ -371,6 +371,9 @@ if [ "$MAC_AVAILABLE" = true ]; then
   (cd DDNet-$VERSION-steam-macos && zip -y -9r ../DDNet-$VERSION-macos.zip *.app)
   rm -r DDNet-*-macos
 fi
+
+mkdir DDNet-$VERSION-android
+cp $BUILDS/DDNet-$VERSION.apk DDNet-$VERSION-android/DDNet.apk
 
 NOW=$(date +'%F %R')
 echo "Finished build of $VERSION at $NOW"
