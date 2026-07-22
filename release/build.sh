@@ -171,7 +171,7 @@ build_linux ()
   umount $DIR/proc $DIR/sys 2> /dev/null || true
   mount -t proc proc proc/
   mount -t sysfs sys sys/
-  #mount -o bind /dev dev/ || true
+  mountpoint -q dev || mount -o bind /dev dev/
 
   rm -rf ddnet-source ddnet-source-steam ddnet-libs-source $MAIN_REPO_NAME-$MAIN_REPO_COMMIT $LIBS_REPO_NAME-$LIBS_REPO_COMMIT
   unzip -q $BUILDDIR/main.zip
