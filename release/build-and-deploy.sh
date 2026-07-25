@@ -24,7 +24,7 @@ if [ "$1" = "nightly" ]; then
   export UPDATE_FLAGS_MACOS="-DINFORM_UPDATE=OFF"
   V="$(curl -s https://raw.githubusercontent.com/$MAIN_REPO_USER/$MAIN_REPO_NAME/$MAIN_REPO_BRANCH/src/game/version.h | grep "^#define GAME_RELEASE_VERSION_INTERNAL" | cut -d' ' -f3)"
   export VERSION="$V-$(date -d '+2 hours' +%Y%m%d)"
-  ./build.sh $VERSION &> builds/DDNet-nightly.log
+  ./build.sh $VERSION &> builds/DDNet-nightly.log || { echo "build.sh failed, see builds/DDNet-nightly.log"; exit 1 }
 
   rm -rf codebrowser
   cd ddnet-source
@@ -51,15 +51,15 @@ elif [ "$1" = "playground" ]; then
   export MAIN_REPO_BRANCH=playground
   V="$(curl -s https://raw.githubusercontent.com/$MAIN_REPO_USER/$MAIN_REPO_NAME/$MAIN_REPO_BRANCH/src/game/version.h | grep "^#define GAME_RELEASE_VERSION_INTERNAL" | cut -d' ' -f3)"
   export VERSION="$V-$(date -d '+2 hours' +%Y%m%d)"
-  ./build.sh $VERSION &> builds/DDNet-playground.log
+  ./build.sh $VERSION &> builds/DDNet-playground.log || { echo "build.sh failed, see builds/DDNet-playground.log"; exit 1 }
 elif [ "$1" = "rc" ]; then
   export UPDATE_FLAGS="-DAUTOUPDATE=OFF -DINFORM_UPDATE=OFF"
   export UPDATE_FLAGS_MACOS="-DINFORM_UPDATE=OFF"
   export VERSION=$2
-  ./build.sh $VERSION &> builds/DDNet-$VERSION.log
+  ./build.sh $VERSION &> builds/DDNet-$VERSION.log || { echo "build.sh failed, see builds/DDNet-$VERSION.log"; exit 1 }
 elif [ "$1" = "release" ]; then
   VERSION=$2
-  ./build.sh $VERSION &> builds/DDNet-$VERSION.log
+  ./build.sh $VERSION &> builds/DDNet-$VERSION.log || { echo "build.sh failed, see builds/DDNet-$VERSION.log"; exit 1 }
 else
   echo "Unknown parameter: $1"
   echo ""
@@ -117,11 +117,24 @@ fi
 if [ ! -d "/home/deen/isos/ddnet/steam/macos" ]; then
   sed -i "/412224/d" tmp.vdf
 fi
+for vdf in ${(f)"$(sed -n 's/.*"\(depot_build_[0-9]*\.vdf\)".*/\1/p' tmp.vdf)"}; do
+  root="$(sed -n 's/.*"ContentRoot"[[:space:]]*"\([^"]*\)".*/\1/p' $vdf)"
+  if [ -z "$root" ] || [ -z "$(ls -A $root 2> /dev/null)" ]; then
+    echo "Steam depot content root '$root' ($vdf) is missing or empty, aborting upload"
+    exit 1
+  fi
+done
+
 # Try a few times, fails sporadically sometimes
+STEAM_OK=0
 repeat 10 {
-  steamcmd +login deen_ddnet "$(cat pass)" +run_app_build /home/deen/isos/ddnet/steamcmd/tmp.vdf +quit && break
+  steamcmd +login deen_ddnet "$(cat pass)" +run_app_build /home/deen/isos/ddnet/steamcmd/tmp.vdf +quit && { STEAM_OK=1; break }
   sleep 1m
 }
+if [ $STEAM_OK -ne 1 ]; then
+  echo "Steam upload failed after 10 attempts"
+  exit 1
+fi
 
 cd ..
 rm -rf builds/* DDNet-$VERSION* steam/* ddnet-source
