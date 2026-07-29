@@ -36,6 +36,7 @@ if [ "$1" = "nightly" ]; then
   cd ..
   rsync -avP --delay-updates --delete-delay codebrowser ddnet:/var/www/
   rm -rf codebrowser
+
   cd ddnet-source
   rm -rf docs/html
   rm -rf docs/warn.log
@@ -44,6 +45,8 @@ if [ "$1" = "nightly" ]; then
   rm -rf docs/html
   rm -rf docs/warn.log
   cd ..
+
+  rsync -avP --delay-updates --delete-delay ddnet-source/build-emscripten/pack_DDNet-$VERSION-Emscripten_tar_xz/DDNet-$VERSION-Emscripten/ ddnet:/var/www-client/nightly
 elif [ "$1" = "playground" ]; then
   export UPDATE_FLAGS="-DAUTOUPDATE=OFF -DINFORM_UPDATE=OFF"
   export UPDATE_FLAGS_MACOS="-DINFORM_UPDATE=OFF"
@@ -60,6 +63,8 @@ elif [ "$1" = "rc" ]; then
 elif [ "$1" = "release" ]; then
   VERSION=$2
   ./build.sh $VERSION &> builds/DDNet-$VERSION.log || { echo "build.sh failed, see builds/DDNet-$VERSION.log"; exit 1 }
+
+  rsync -avP --delay-updates --delete-delay ddnet-source/build-emscripten/pack_DDNet-$VERSION-Emscripten_tar_xz/DDNet-$VERSION-Emscripten/ ddnet:/var/www-client/$VERSION
 else
   echo "Unknown parameter: $1"
   echo ""
