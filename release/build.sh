@@ -281,9 +281,8 @@ build_emscripten ()
   cd ddnet-source
   mkdir build-emscripten
   cd build-emscripten
-  rustup override set 1.89.0
   source "$HOME/emsdk/emsdk_env.sh"
-  emcmake cmake -H.. -G "Unix Makefiles" -B . -DVERSION=$VERSION -DCMAKE_BUILD_TYPE=Release -DAUTOUPDATE=OFF -DINFORM_UPDATE=OFF -DVIDEORECORDER=OFF -DVULKAN=OFF -DSERVER=OFF -DTOOLS=OFF -DPREFER_BUNDLED_LIBS=ON
+  rustup run 1.89.0 emcmake cmake -H.. -G "Unix Makefiles" -B . -DVERSION=$VERSION -DCMAKE_BUILD_TYPE=Release -DIPO=ON -DAUTOUPDATE=OFF -DINFORM_UPDATE=OFF -DVIDEORECORDER=OFF -DVULKAN=OFF -DSERVER=OFF -DTOOLS=OFF -DPREFER_BUNDLED_LIBS=ON
   cmake --build . --target game-client -j2
   cmake --build . --target package_default -j2
   mv DDNet-$VERSION-Emscripten.tar.xz $BUILDS/DDNet-$VERSION-emscripten.tar.xz
