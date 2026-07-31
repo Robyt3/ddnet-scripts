@@ -34,8 +34,9 @@ if [ "$1" = "nightly" ]; then
   /home/deen/git/codebrowser/generator/codebrowser_generator -b . -a -o ../codebrowser -p DDNet:/home/deen/isos/ddnet/ddnet-source/src:$VERSION -d https://ddnet.org/codebrowser-data
   /home/deen/git/codebrowser/indexgenerator/codebrowser_indexgenerator ../codebrowser -d https://ddnet.org/codebrowser-data -p DDNet:/home/deen/isos/ddnet/ddnet-source/src:$VERSION
   cd ..
-  rsync -avP --delay-updates --delete-delay codebrowser ddnet:/var/www/
+  rsync -avP codebrowser/ ddnet:/var/www/codebrowser.new
   rm -rf codebrowser
+  ssh ddnet "cd /var/www && mv codebrowser codebrowser.old && mv codebrowser.new codebrowser && rm -rf codebrowser.old"
 
   cd ddnet-source
   rm -rf docs/html
