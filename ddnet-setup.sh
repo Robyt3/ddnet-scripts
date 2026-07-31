@@ -62,6 +62,7 @@ iptables -I OUTPUT -d 147.251.0.0/16 -j DROP
 iptables -A INPUT -s 127.0.0.1 -j ACCEPT
 iptables -I INPUT 1 -p tcp --src $DDNET_IP -j ACCEPT
 iptables -I INPUT 2 -p tcp -m tcp --dport 6546 -m state --state NEW -m hashlimit --hashlimit-above 1/minute --hashlimit-mode srcip --hashlimit-name ssh -j DROP
+iptables -A INPUT -p tcp -m tcp --dport 8298:8400 -m conntrack --ctstate NEW -j ACCEPT
 iptables -A INPUT -p tcp -m tcp -m conntrack -m multiport --ctstate NEW ! --dports 27685,6546,22 -j DROP
 iptables-save > /etc/iptables.up.rules
 
@@ -115,6 +116,63 @@ EOF
 
 chmod +x /home/teeworlds/servers/run-all.sh
 chmod +x /home/teeworlds/run-all.sh
+
+apt-get -y install certbot python3-venv
+python3 -m venv /opt/certbot
+/opt/certbot/bin/pip install --upgrade pip certbot
+mkdir -p /etc/systemd/system/certbot.service.d
+cat <<EOF > /etc/systemd/system/certbot.service.d/override.conf
+[Service]
+ExecStart=
+ExecStart=/opt/certbot/bin/certbot -q renew --no-random-sleep-on-renew
+EOF
+systemctl daemon-reload
+systemctl enable --now certbot.timer
+
+cat <<'EOF' > /usr/local/sbin/acme-http-port
+#!/bin/bash
+# usage: acme-http-port open|close   -- toggles inbound TCP 80 for ACME http-01
+RULE=(-p tcp -m tcp --dport 80 -m conntrack --ctstate NEW -j ACCEPT)
+case "$1" in
+open)
+	if ! iptables -C INPUT "${RULE[@]}" 2>/dev/null; then
+		# Insert just before the blanket TCP DROP so the source-based DROPs above still win.
+		POS=$(iptables -L INPUT --line-numbers -n | awk '/multiport/ && /DROP/ {print $1; exit}')
+		iptables -I INPUT "${POS:-1}" "${RULE[@]}"
+	fi
+	;;
+close)
+	while iptables -C INPUT "${RULE[@]}" 2>/dev/null; do
+		iptables -D INPUT "${RULE[@]}"
+	done
+	;;
+*)
+	echo "usage: $0 open|close" >&2
+	exit 1
+	;;
+esac
+EOF
+chmod +x /usr/local/sbin/acme-http-port
+
+mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+cat <<'EOF' > /etc/letsencrypt/renewal-hooks/deploy/copy-to-teeworlds.sh
+#!/bin/bash
+set -e
+DEST=/home/teeworlds/servers/ssl
+install -d -o teeworlds -g users -m 750 "$DEST"
+install -o teeworlds -g users -m 644 "$RENEWED_LINEAGE/fullchain.pem" "$DEST/fullchain.pem"
+install -o teeworlds -g users -m 600 "$RENEWED_LINEAGE/privkey.pem" "$DEST/privkey.pem"
+logger -t certbot-ddnet "published $RENEWED_LINEAGE to $DEST (restart servers to load it)"
+EOF
+chmod +x /etc/letsencrypt/renewal-hooks/deploy/copy-to-teeworlds.sh
+
+/opt/certbot/bin/certbot certonly --cert-name $NAME_LOWER.ddnet.org --standalone \
+  --key-type ecdsa --preferred-profile shortlived \
+  -d $NAME_LOWER.ddnet.org --ip-address `dig +short -4 $NAME_LOWER.ddnet.org | tail -1` \
+  --pre-hook '/usr/local/sbin/acme-http-port open' \
+  --post-hook '/usr/local/sbin/acme-http-port close' \
+  --non-interactive --agree-tos --register-unsafely-without-email \
+  || echo "WARNING: no wss certificate, is inbound TCP 80 reachable here?"
 
 # On CHN servers:
 # From another CHN server: cd ~/servers && tar cfz chn.tar.gz types/*/flexvotes.cfg types/*/flexname.cfg announcement.txt ddrace_local_auths.cfg censorlist.txt servers/*.cfg
