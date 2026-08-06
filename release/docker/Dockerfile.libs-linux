@@ -1,0 +1,25 @@
+# syntax=docker/dockerfile:1
+# Dockerfile.libs-linux - Builds DDNet dependency libraries for Linux x86_64 and x86
+# Must be built with --platform linux/amd64
+# Based on the x86_64/x86 sections of ddnet-lib-update.sh
+#
+# Usage: docker build --platform linux/amd64 -f Dockerfile.libs-linux -t ddnet-libs-linux .
+#        docker run --rm -v ./output:/output -e PLATFORM=x86_64 ddnet-libs-linux
+#        docker run --rm -v ./output:/output -e PLATFORM=x86 ddnet-libs-linux
+
+FROM --platform=linux/amd64 debian:11-slim
+
+RUN dpkg --add-architecture i386 && apt-get update && apt-get install -y --no-install-recommends \
+    build-essential ca-certificates cmake curl gcc-multilib g++-multilib \
+    libasound2-dev libpulse-dev libx11-dev libxext-dev libxrandr-dev \
+    libxcursor-dev libxi-dev libxss-dev libdbus-1-dev libudev-dev \
+    libgl1-mesa-dev libgles2-mesa-dev libwayland-dev \
+    libssl-dev libssl-dev:i386 zlib1g-dev:i386 \
+    nasm pkg-config python3 wget xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY scripts/build-libs-linux.sh /usr/local/bin/build-libs-linux.sh
+RUN chmod +x /usr/local/bin/build-libs-linux.sh
+
+WORKDIR /build
+ENTRYPOINT ["/usr/local/bin/build-libs-linux.sh"]

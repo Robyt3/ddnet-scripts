@@ -1,0 +1,36 @@
+# syntax=docker/dockerfile:1
+# Dockerfile.libs-winarm64 - Builds DDNet dependency libraries for Windows ARM64
+# Cross-compiles from amd64 using llvm-mingw
+# Based on ddnet-arm/Dockerfile
+#
+# Usage: docker build --platform linux/amd64 -f Dockerfile.libs-winarm64 -t ddnet-libs-winarm64 .
+#        docker run --rm -v ./output:/output ddnet-libs-winarm64
+
+FROM --platform=linux/amd64 debian:12-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV LLVM_MINGW_VERSION=20240619
+ENV TOOLCHAIN_DIR=/opt/llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-20.04-x86_64
+ENV SYSROOT=${TOOLCHAIN_DIR}/aarch64-w64-mingw32
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake ninja-build curl wget pkg-config unzip xz-utils \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install llvm-mingw toolchain (x86_64 host, cross-compiles for aarch64)
+RUN cd /tmp && \
+    wget -q "https://github.com/mstorsjo/llvm-mingw/releases/download/${LLVM_MINGW_VERSION}/llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-20.04-x86_64.tar.xz" && \
+    tar xf "llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-20.04-x86_64.tar.xz" -C /opt && \
+    rm "llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-20.04-x86_64.tar.xz"
+ENV PATH="${TOOLCHAIN_DIR}/bin:${PATH}"
+ENV CC=aarch64-w64-mingw32-clang
+ENV CXX=aarch64-w64-mingw32-clang++
+ENV RC=aarch64-w64-mingw32-windres
+ENV AR=aarch64-w64-mingw32-ar
+
+COPY scripts/build-libs-winarm64.sh /usr/local/bin/build-libs-winarm64.sh
+RUN chmod +x /usr/local/bin/build-libs-winarm64.sh
+
+WORKDIR /build
+ENTRYPOINT ["/usr/local/bin/build-libs-winarm64.sh"]

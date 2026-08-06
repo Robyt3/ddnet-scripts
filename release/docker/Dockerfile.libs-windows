@@ -1,0 +1,21 @@
+# syntax=docker/dockerfile:1
+# Dockerfile.libs-windows - Builds DDNet dependency libraries for Windows x64 and x86
+# Must be built with --platform linux/amd64
+# Based on the win64/win32 sections of ddnet-lib-update.sh
+#
+# Usage: docker build --platform linux/amd64 -f Dockerfile.libs-windows -t ddnet-libs-windows .
+#        docker run --rm -v ./output:/output -e PLATFORM=64 ddnet-libs-windows
+#        docker run --rm -v ./output:/output -e PLATFORM=32 ddnet-libs-windows
+
+FROM --platform=linux/amd64 debian:12-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential ca-certificates cmake curl mingw-w64 mingw-w64-tools nasm \
+    pkg-config python3 unzip wget xz-utils zip \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY scripts/build-libs-windows.sh /usr/local/bin/build-libs-windows.sh
+RUN chmod +x /usr/local/bin/build-libs-windows.sh
+
+WORKDIR /build
+ENTRYPOINT ["/usr/local/bin/build-libs-windows.sh"]

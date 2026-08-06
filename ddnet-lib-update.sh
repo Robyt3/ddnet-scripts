@@ -104,9 +104,10 @@ make -j4
 cp */*.a ..
 
 cd ../libwebsockets-4.3-stable
-CXXFLAGS=-fPIC CFLAGS=-fPIC LDFLAGS=-fPIC cmake -DLWS_IPV6=ON -DLWS_WITH_SSL=OFF -DLWS_UNIX_SOCK=OFF -DLWS_WITHOUT_EXTENSIONS=ON -DLWS_WITH_SYS_SMD=OFF .
+CXXFLAGS=-fPIC CFLAGS=-fPIC LDFLAGS=-fPIC cmake -DLWS_IPV6=ON -DLWS_WITHOUT_TESTAPPS=ON -DLWS_WITH_SSL=OFF -DLWS_UNIX_SOCK=OFF -DLWS_WITHOUT_EXTENSIONS=ON -DLWS_WITH_SYS_SMD=OFF .
 make -j4
 cp lib/libwebsockets.a ..
+cp lws_config.h ..
 
 cd ../libpng-1.6.43
 ./configure CFLAGS=-FPIC
@@ -170,9 +171,10 @@ make -j4
 cp */*.a ..
 
 cd ../libwebsockets-4.3-stable
-CXXFLAGS="-m32 -fPIC" CFLAGS="-m32 -fPIC" LDFLAGS="-m32 -fPIC" cmake -DLWS_IPV6=ON -DLWS_WITH_SSL=OFF -DLWS_UNIX_SOCK=OFF -DLWS_WITHOUT_EXTENSIONS=ON -DLWS_WITH_SYS_SMD=OFF .
+CXXFLAGS="-m32 -fPIC" CFLAGS="-m32 -fPIC" LDFLAGS="-m32 -fPIC" cmake -DLWS_IPV6=ON -DLWS_WITHOUT_TESTAPPS=ON -DLWS_WITH_SSL=OFF -DLWS_UNIX_SOCK=OFF -DLWS_WITHOUT_EXTENSIONS=ON -DLWS_WITH_SYS_SMD=OFF .
 make -j4
 cp lib/libwebsockets.a ..
+cp lws_config.h ..
 
 cd ../libpng-1.6.43
 ./configure CFLAGS="-m32 -FPIC" --host=i686-linux
@@ -260,9 +262,16 @@ make -j4
 cp libavcodec/avcodec-61.dll libavformat/avformat-61.dll libavutil/avutil-59.dll libswresample/swresample-5.dll libswscale/swscale-8.dll libavcodec/avcodec.lib libavformat/avformat.lib libavutil/avutil.lib libswresample/swresample.lib libswscale/swscale.lib ..
 
 cd ../libwebsockets-4.3-stable
-cmake -DCMAKE_TOOLCHAIN_FILE=contrib/cross-w64.cmake -DLWS_IPV6=ON -DLWS_WITH_SSL=OFF -DLWS_UNIX_SOCK=OFF -DLWS_WITHOUT_EXTENSIONS=ON -DLWS_WITH_SYS_SMD=OFF .
+# v4.3-stable tip uses vpt in pollfd.c with a guard narrower than its declaration
+# (broken for Windows, fixed on lws main); no-op once the branch is fixed
+sed -i 's/^#if !defined(LWS_WITH_EVENT_LIBS)$/#if !defined(LWS_WITH_EVENT_LIBS) \&\& !defined(WIN32) \&\& !defined(_WIN32)/' lib/core-net/pollfd.c
+cmake -DCMAKE_TOOLCHAIN_FILE=contrib/cross-w64.cmake -DLWS_IPV6=ON -DLWS_WITHOUT_TESTAPPS=ON -DLWS_WITH_SSL=OFF -DLWS_UNIX_SOCK=OFF -DLWS_WITHOUT_EXTENSIONS=ON -DLWS_WITH_SYS_SMD=OFF .
 make -j4
 cp bin/libwebsockets.dll ..
+cp lws_config.h ..
+# import lib for MSVC; gendef is not packaged, mkdef.py is in ddnet-scripts
+x86_64-w64-mingw32-objdump -p bin/libwebsockets.dll | python3 mkdef.py libwebsockets.dll > libwebsockets.def
+x86_64-w64-mingw32-dlltool -d libwebsockets.def -D libwebsockets.dll -l ../websockets.lib
 
 cd ../libpng-1.6.43
 CFLAGS="-I/usr/x86_64-w64-mingw32/include" LDFLAGS="-L/usr/x86_64-w64-mingw32/lib" ./configure --host=x86_64-w64-mingw32
@@ -353,9 +362,16 @@ make -j4
 cp libavcodec/avcodec-61.dll libavformat/avformat-61.dll libavutil/avutil-59.dll libswresample/swresample-5.dll libswscale/swscale-8.dll libavcodec/avcodec.lib libavformat/avformat.lib libavutil/avutil.lib libswresample/swresample.lib libswscale/swscale.lib ..
 
 cd ../libwebsockets-4.3-stable
-cmake -DCMAKE_TOOLCHAIN_FILE=contrib/cross-w32.cmake -DLWS_IPV6=ON -DLWS_WITH_SSL=OFF -DLWS_UNIX_SOCK=OFF -DLWS_WITHOUT_EXTENSIONS=ON -DLWS_WITH_SYS_SMD=OFF .
+# v4.3-stable tip uses vpt in pollfd.c with a guard narrower than its declaration
+# (broken for Windows, fixed on lws main); no-op once the branch is fixed
+sed -i 's/^#if !defined(LWS_WITH_EVENT_LIBS)$/#if !defined(LWS_WITH_EVENT_LIBS) \&\& !defined(WIN32) \&\& !defined(_WIN32)/' lib/core-net/pollfd.c
+cmake -DCMAKE_TOOLCHAIN_FILE=contrib/cross-w32.cmake -DLWS_IPV6=ON -DLWS_WITHOUT_TESTAPPS=ON -DLWS_WITH_SSL=OFF -DLWS_UNIX_SOCK=OFF -DLWS_WITHOUT_EXTENSIONS=ON -DLWS_WITH_SYS_SMD=OFF .
 make -j4
 cp bin/libwebsockets.dll ..
+cp lws_config.h ..
+# import lib for MSVC; gendef is not packaged, mkdef.py is in ddnet-scripts
+i686-w64-mingw32-objdump -p bin/libwebsockets.dll | python3 mkdef.py libwebsockets.dll > libwebsockets.def
+i686-w64-mingw32-dlltool -d libwebsockets.def -D libwebsockets.dll -l ../websockets.lib
 
 cd ../libpng-1.6.43
 CFLAGS="-I/usr/i686-w64-mingw32/include" LDFLAGS="-L/usr/i686-w64-mingw32/lib" ./configure --host=i686-w64-mingw32
@@ -434,9 +450,10 @@ cp libavcodec/libavcodec.61.dylib libavformat/libavformat.61.dylib libavutil/lib
 
 cd ../libwebsockets-4.3-stable
 # own contrib/cross-macos-x86_64.cmake
-cmake -DCMAKE_TOOLCHAIN_FILE=contrib/cross-macos-x86_64.cmake -DLWS_IPV6=ON -DLWS_WITH_SSL=OFF -DLWS_UNIX_SOCK=OFF -DLWS_WITHOUT_EXTENSIONS=ON -DLWS_WITH_SYS_SMD=OFF .
+cmake -DCMAKE_TOOLCHAIN_FILE=contrib/cross-macos-x86_64.cmake -DLWS_IPV6=ON -DLWS_WITHOUT_TESTAPPS=ON -DLWS_WITH_SSL=OFF -DLWS_UNIX_SOCK=OFF -DLWS_WITHOUT_EXTENSIONS=ON -DLWS_WITH_SYS_SMD=OFF .
 make -j4
 cp lib/libwebsockets.19.dylib ..
+cp lws_config.h ..
 
 cd ../libpng-1.6.43
 ./configure --host=x86_64-apple-darwin20.1
@@ -505,9 +522,10 @@ cp libavcodec/libavcodec.61.dylib libavformat/libavformat.61.dylib libavutil/lib
 
 cd ../libwebsockets-4.3-stable
 # own contrib/cross-macos-arm64.cmake
-cmake -DCMAKE_TOOLCHAIN_FILE=contrib/cross-macos-arm64.cmake -DLWS_IPV6=ON -DLWS_WITH_SSL=OFF -DLWS_UNIX_SOCK=OFF -DLWS_WITHOUT_EXTENSIONS=ON -DLWS_WITH_SYS_SMD=OFF .
+cmake -DCMAKE_TOOLCHAIN_FILE=contrib/cross-macos-arm64.cmake -DLWS_IPV6=ON -DLWS_WITHOUT_TESTAPPS=ON -DLWS_WITH_SSL=OFF -DLWS_UNIX_SOCK=OFF -DLWS_WITHOUT_EXTENSIONS=ON -DLWS_WITH_SYS_SMD=OFF .
 make -j4
 cp lib/libwebsockets.19.dylib ..
+cp lws_config.h ..
 
 cd ../libpng-1.6.43
 ./configure --host=aarch64-apple-darwin20.1
@@ -518,6 +536,7 @@ cp .libs/libpng16.16.dylib ..
 otool -L $i
 install_name_tool -id @rpath/SDL2.framework/Versions/A/SDL2 lib64/SDL2.framework/Versions/A/SDL2
 install_name_tool -id @rpath/libpng16.16.dylib libpng16.16.dylib
+install_name_tool -id @rpath/libwebsockets.19.dylib libwebsockets.19.dylib
 install_name_tool -id @rpath/libfreetype.6.dylib libfreetype.6.dylib
 install_name_tool -id @rpath/libswscale.8.dylib libswscale.8.dylib
 install_name_tool -change /usr/local/lib/libavutil.59.dylib @rpath/libavutil.59.dylib libswscale.8.dylib
@@ -538,3 +557,8 @@ cd sdl/mac; rm libfat/SDL2.framework/Versions/A/SDL2; lipo -create lib64/SDL2.fr
 
 # sign all arm64 and fat dylibs using codesign on macOS (until https://github.com/thefloweringash/sigtool/issues/8 is fixed, then we can automate it on Linux)
 for i in **/libarm64/*.dylib **/libfat/*.dylib sdl/mac/libarm64/SDL2.framework sdl/mac/libfat/SDL2.framework; do codesign -s - $i; done
+
+# The lws_config.h files collected above go into the per-platform ddnet-libs
+# include dirs (websockets/include/{windows,mac,linux}/lws_config.h, next to the
+# lws headers); lws only generates it per build. The windows file combines the
+# x86/x64 and arm64 configs behind an architecture #if.
