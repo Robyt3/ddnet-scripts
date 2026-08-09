@@ -16,6 +16,11 @@ RUN dpkg --add-architecture i386 && apt-get update && apt-get install -y --no-in
     libgl1-mesa-dev libgles2-mesa-dev libwayland-dev \
     libssl-dev libssl-dev:i386 zlib1g-dev:i386 \
     nasm pkg-config python3 wget xz-utils \
+    libxtst-dev libxkbcommon-dev libxfixes-dev libdrm-dev libgbm-dev libibus-1.0-dev \
+    libx11-dev:i386 libxext-dev:i386 libxrandr-dev:i386 libxcursor-dev:i386 \
+    libxi-dev:i386 libxss-dev:i386 libxfixes-dev:i386 libxtst-dev:i386 \
+    libxkbcommon-dev:i386 libasound2-dev:i386 libpulse-dev:i386 libdbus-1-dev:i386 \
+    libudev-dev:i386 libdrm-dev:i386 libgbm-dev:i386 libibus-1.0-dev:i386 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY scripts/build-libs-linux.sh /usr/local/bin/build-libs-linux.sh

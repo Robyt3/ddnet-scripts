@@ -10,7 +10,7 @@ set -ex
 OUTPUT=/output
 
 # Library versions
-SDL2_VERSION=2.32.10
+SDL3_VERSION=3.4.14
 CURL_VERSION=8.8.0
 FREETYPE_VERSION=2.13.2
 LIBOGG_VERSION=1.3.5
@@ -44,7 +44,7 @@ CURL_CONFIGURE_OPTIONS=(
 
 # Download all sources
 cd /build
-wget -q --tries=5 --timeout=60 --waitretry=10 --retry-on-http-error=429,500,502,503 "https://libsdl.org/release/SDL2-${SDL2_VERSION}.tar.gz"
+wget -q --tries=5 --timeout=60 --waitretry=10 --retry-on-http-error=429,500,502,503 "https://libsdl.org/release/SDL3-${SDL3_VERSION}.tar.gz"
 wget -q --tries=5 --timeout=60 --waitretry=10 --retry-on-http-error=429,500,502,503 "https://curl.haxx.se/download/curl-${CURL_VERSION}.tar.gz"
 wget -q --tries=5 --timeout=60 --waitretry=10 --retry-on-http-error=429,500,502,503 "http://downloads.xiph.org/releases/ogg/libogg-${LIBOGG_VERSION}.tar.gz"
 wget -q --tries=5 --timeout=60 --waitretry=10 --retry-on-http-error=429,500,502,503 "https://archive.mozilla.org/pub/opus/opus-${OPUS_VERSION}.tar.gz"
@@ -59,7 +59,7 @@ wget -q --tries=5 --timeout=60 --waitretry=10 --retry-on-http-error=429,500,502,
 
 mkdir src && cd src
 tar xf "../zlib-${ZLIB_VERSION}.tar.gz"
-tar xf "../SDL2-${SDL2_VERSION}.tar.gz"
+tar xf "../SDL3-${SDL3_VERSION}.tar.gz"
 tar xf "../curl-${CURL_VERSION}.tar.gz"
 tar xf "../libogg-${LIBOGG_VERSION}.tar.gz"
 tar xf "../opus-${OPUS_VERSION}.tar.gz"
@@ -71,12 +71,16 @@ tar xf "../ffmpeg-${FFMPEG_VERSION}.tar.gz"
 tar xf "../v${LWS_VERSION}.tar.gz"
 tar xf "../libpng-${LIBPNG_VERSION}.tar.gz"
 
-# --- SDL2 ---
-cd /build/src/SDL2-${SDL2_VERSION}
-./configure --host=$HOST --enable-ime
-make -j"$(nproc)"
-cp build/.libs/SDL2.dll build/.libs/libSDL2.dll.a /build/src/
-${HOST}-dlltool -v --export-all-symbols -D SDL2.dll -l /build/src/SDL2.lib build/.libs/*.o
+# --- SDL3 ---
+cd /build/src/SDL3-${SDL3_VERSION}
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_NAME=Windows \
+  -DCMAKE_C_COMPILER=${HOST}-gcc -DCMAKE_CXX_COMPILER=${HOST}-g++ \
+  -DCMAKE_RC_COMPILER=${HOST}-windres \
+  -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF
+cmake --build build -j"$(nproc)"
+cp build/SDL3.dll build/libSDL3.dll.a /build/src/
+# import lib for MSVC, from the DLL's export table
+(cd /build/src && gendef SDL3.dll && ${HOST}-dlltool -d SDL3.def -D SDL3.dll -l /build/src/SDL3.lib)
 
 # --- curl ---
 cd /build/src/curl-${CURL_VERSION}
@@ -196,7 +200,7 @@ for i in *.dll; do ${HOST}-strip -s "$i"; done
 
 # --- Distribute to ddnet-libs layout ---
 mkdir -p "$OUTPUT/sdl/windows/${LIB_SUFFIX}"
-cp SDL2.dll SDL2.lib libSDL2.dll.a "$OUTPUT/sdl/windows/${LIB_SUFFIX}/"
+cp SDL3.dll SDL3.lib libSDL3.dll.a "$OUTPUT/sdl/windows/${LIB_SUFFIX}/"
 
 mkdir -p "$OUTPUT/curl/windows/${LIB_SUFFIX}"
 cp libcurl.dll curl.lib "$OUTPUT/curl/windows/${LIB_SUFFIX}/"

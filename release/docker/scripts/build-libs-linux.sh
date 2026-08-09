@@ -10,7 +10,7 @@ set -ex
 OUTPUT=/output
 
 # Library versions
-SDL2_VERSION=2.32.10
+SDL3_VERSION=3.4.14
 CURL_VERSION=8.8.0
 LIBOGG_VERSION=1.3.5
 OPUS_VERSION=1.3.1
@@ -27,6 +27,9 @@ if [ "$PLATFORM" = "x86" ]; then
   X264_HOST="--host=i686-linux"
   FFMPEG_ARCH="--cpu=i686"
   LIB_SUFFIX="lib32"
+  # SDL3's cmake build must see the i386 .pc files, the amd64 glibconfig.h
+  # otherwise breaks the ibus build
+  SDL_PKG_CONFIG_ENV="PKG_CONFIG_LIBDIR=/usr/lib/i386-linux-gnu/pkgconfig:/usr/share/pkgconfig"
 else
   ARCH_FLAGS=""
   ARCH_FPIC="-fPIC"
@@ -34,13 +37,14 @@ else
   X264_HOST=""
   FFMPEG_ARCH=""
   LIB_SUFFIX="lib64"
+  SDL_PKG_CONFIG_ENV=""
 fi
 
 COMMON_CFLAGS="${ARCH_FLAGS} ${ARCH_FPIC}"
 
 # Download all sources
 cd /build
-wget -q --tries=5 --timeout=60 --waitretry=10 --retry-on-http-error=429,500,502,503 "https://libsdl.org/release/SDL2-${SDL2_VERSION}.tar.gz"
+wget -q --tries=5 --timeout=60 --waitretry=10 --retry-on-http-error=429,500,502,503 "https://libsdl.org/release/SDL3-${SDL3_VERSION}.tar.gz"
 wget -q --tries=5 --timeout=60 --waitretry=10 --retry-on-http-error=429,500,502,503 "https://curl.haxx.se/download/curl-${CURL_VERSION}.tar.gz"
 wget -q --tries=5 --timeout=60 --waitretry=10 --retry-on-http-error=429,500,502,503 "http://downloads.xiph.org/releases/ogg/libogg-${LIBOGG_VERSION}.tar.gz"
 wget -q --tries=5 --timeout=60 --waitretry=10 --retry-on-http-error=429,500,502,503 "https://archive.mozilla.org/pub/opus/opus-${OPUS_VERSION}.tar.gz"
@@ -52,7 +56,7 @@ wget -q --tries=5 --timeout=60 --waitretry=10 --retry-on-http-error=429,500,502,
 wget -q --tries=5 --timeout=60 --waitretry=10 --retry-on-http-error=429,500,502,503 "https://download.sourceforge.net/libpng/libpng-${LIBPNG_VERSION}.tar.gz"
 
 mkdir src && cd src
-tar xf "../SDL2-${SDL2_VERSION}.tar.gz"
+tar xf "../SDL3-${SDL3_VERSION}.tar.gz"
 tar xf "../curl-${CURL_VERSION}.tar.gz"
 tar xf "../libogg-${LIBOGG_VERSION}.tar.gz"
 tar xf "../opus-${OPUS_VERSION}.tar.gz"
@@ -97,12 +101,16 @@ CFLAGS="$COMMON_CFLAGS" LDFLAGS="$ARCH_FLAGS" \
 CFLAGS="$COMMON_CFLAGS" LDFLAGS="$ARCH_FLAGS" make -j"$(nproc)"
 cp .libs/libopusfile.a /build/src/
 
-# --- SDL2 ---
-cd /build/src/SDL2-${SDL2_VERSION}
-./configure --enable-ime CFLAGS="$COMMON_CFLAGS" LDFLAGS="$ARCH_FLAGS" --disable-video-wayland $HOST_FLAG
-CFLAGS="$COMMON_CFLAGS" LDFLAGS="$ARCH_FLAGS" make -j"$(nproc)"
-cp build/.libs/libSDL2-2.0.so.0.* /build/src/libSDL2-2.0.so.0
-strip -s /build/src/libSDL2-2.0.so.0
+# --- SDL3 ---
+cd /build/src/SDL3-${SDL3_VERSION}
+env $SDL_PKG_CONFIG_ENV cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_C_FLAGS="$ARCH_FLAGS" -DCMAKE_CXX_FLAGS="$ARCH_FLAGS" \
+  -DCMAKE_SHARED_LINKER_FLAGS="$ARCH_FLAGS" -DCMAKE_EXE_LINKER_FLAGS="$ARCH_FLAGS" \
+  -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF \
+  -DSDL_WAYLAND=OFF -DSDL_RPATH=OFF
+cmake --build build -j"$(nproc)"
+cp build/libSDL3.so.0.*.* /build/src/libSDL3.so.0
+strip -s /build/src/libSDL3.so.0
 
 # --- sqlite ---
 cd /build/src/sqlite-autoconf-${SQLITE_VERSION}
@@ -158,7 +166,7 @@ mkdir -p "$OUTPUT/opus/linux/${LIB_SUFFIX}"
 cp libogg.a libopus.a libopusfile.a "$OUTPUT/opus/linux/${LIB_SUFFIX}/"
 
 mkdir -p "$OUTPUT/sdl/linux/${LIB_SUFFIX}"
-cp libSDL2-2.0.so.0 "$OUTPUT/sdl/linux/${LIB_SUFFIX}/"
+cp libSDL3.so.0 "$OUTPUT/sdl/linux/${LIB_SUFFIX}/"
 
 mkdir -p "$OUTPUT/sqlite3/linux/${LIB_SUFFIX}"
 cp libsqlite3.a "$OUTPUT/sqlite3/linux/${LIB_SUFFIX}/"

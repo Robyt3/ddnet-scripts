@@ -3,7 +3,7 @@
 
 cd debian11/root
 rm -rf *
-wget https://libsdl.org/release/SDL2-2.32.10.tar.gz
+wget https://libsdl.org/release/SDL3-3.4.14.tar.gz
 wget https://curl.haxx.se/download/curl-8.8.0.tar.gz
 wget https://download.savannah.gnu.org/releases/freetype/freetype-2.13.2.tar.gz
 wget http://downloads.xiph.org/releases/ogg/libogg-1.3.5.tar.gz
@@ -55,7 +55,7 @@ tar xvf ../curl-8.8.0.tar.gz
 tar xvf ../libogg-1.3.5.tar.gz
 tar xvf ../opus-1.3.1.tar.gz
 tar xvf ../opusfile-0.12.tar.gz
-tar xvf ../SDL2-2.32.10.tar.gz
+tar xvf ../SDL3-3.4.14.tar.gz
 tar xvf ../sqlite-autoconf-3460000.tar.gz
 tar xvf ../x264-master.tar.bz2
 tar xvf ../ffmpeg-7.0.1.tar.gz
@@ -82,11 +82,11 @@ DEPS_LIBS="-lopus -logg -L/root/x86-64/opus-1.3.1/.libs/ -L/root/x86-64/libogg-1
 make -j4
 cp .libs/libopusfile.a ..
 
-cd ../SDL2-2.32.10
-./configure --enable-ime CFLAGS=-fPIC --disable-video-wayland
-CFLAGS=-fPIC make -j4
-cp build/.libs/libSDL2-2.0.so.0.*.* ../libSDL2-2.0.so.0
-strip -s ../libSDL2-2.0.so.0
+cd ../SDL3-3.4.14
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF -DSDL_WAYLAND=OFF -DSDL_RPATH=OFF
+cmake --build build -j4
+cp build/libSDL3.so.0.*.* ../libSDL3.so.0
+strip -s ../libSDL3.so.0
 
 cd ../sqlite-autoconf-3460000
 ./configure CFLAGS="-fPIC -DSQLITE_OMIT_LOAD_EXTENSION"
@@ -122,7 +122,7 @@ tar xvf ../curl-8.8.0.tar.gz
 tar xvf ../libogg-1.3.5.tar.gz
 tar xvf ../opus-1.3.1.tar.gz
 tar xvf ../opusfile-0.12.tar.gz
-tar xvf ../SDL2-2.32.10.tar.gz
+tar xvf ../SDL3-3.4.14.tar.gz
 tar xvf ../sqlite-autoconf-3460000.tar.gz
 tar xvf ../x264-master.tar.bz2
 tar xvf ../ffmpeg-7.0.1.tar.gz
@@ -149,11 +149,13 @@ CFLAGS=-m32 LDFLAGS=-m32 DEPS_LIBS="-lopus -logg -L/root/x86/opus-1.3.1/.libs/ -
 CFLAGS=-m32 LDFLAGS=-m32 make -j4
 cp .libs/libopusfile.a ..
 
-cd ../SDL2-2.32.10
-./configure --enable-ime CFLAGS="-fPIC -m32" LDFLAGS=-m32 --disable-video-wayland
-LDFLAGS=-m32 CFLAGS="-fPIC -m32" make -j4
-cp build/.libs/libSDL2-2.0.so.0.*.* ../libSDL2-2.0.so.0
-strip -s ../libSDL2-2.0.so.0
+# The i386 variants of the dev packages are needed here, and pkg-config must be
+# pointed at them, otherwise the amd64 glibconfig.h breaks the ibus build
+cd ../SDL3-3.4.14
+PKG_CONFIG_LIBDIR=/usr/lib/i386-linux-gnu/pkgconfig:/usr/share/pkgconfig cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-m32 -DCMAKE_CXX_FLAGS=-m32 -DCMAKE_SHARED_LINKER_FLAGS=-m32 -DCMAKE_EXE_LINKER_FLAGS=-m32 -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF -DSDL_WAYLAND=OFF -DSDL_RPATH=OFF
+cmake --build build -j4
+cp build/libSDL3.so.0.*.* ../libSDL3.so.0
+strip -s ../libSDL3.so.0
 
 cd ../sqlite-autoconf-3460000
 ./configure CFLAGS="-fPIC -m32 -DSQLITE_OMIT_LOAD_EXTENSION"
@@ -185,7 +187,7 @@ cd ../..
 [exit chroot]
 mkdir win64
 cd win64
-tar xvf ../SDL2-2.32.10.tar.gz
+tar xvf ../SDL3-3.4.14.tar.gz
 tar xvf ../curl-8.8.0.tar.gz
 tar xvf ../libogg-1.3.5.tar.gz
 tar xvf ../opus-1.3.1.tar.gz
@@ -197,11 +199,13 @@ tar xvf ../ffmpeg-7.0.1.tar.gz
 tar xvf ../v4.3-stable.tar.gz
 tar xvf ../libpng-1.6.43.tar.gz
 
-cd SDL2-2.32.10
-./configure --host=x86_64-w64-mingw32 --enable-ime
-make -j4
-cp build/.libs/SDL2.dll build/.libs/libSDL2.dll.a ..
-x86_64-w64-mingw32-dlltool -v --export-all-symbols -D SDL2.dll -l ../SDL2.lib build/.libs/*.o
+cd SDL3-3.4.14
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ -DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF
+cmake --build build -j4
+cp build/SDL3.dll build/libSDL3.dll.a ..
+# import lib for MSVC; gendef is not packaged, mkdef.py is in ddnet-scripts
+x86_64-w64-mingw32-objdump -p build/SDL3.dll | python3 mkdef.py SDL3.dll > SDL3.def
+x86_64-w64-mingw32-dlltool -d SDL3.def -D SDL3.dll -l ../SDL3.lib
 
 cd ../curl-8.8.0
 ./configure --host=x86_64-w64-mingw32 --with-schannel --enable-shared "${CURL_CONFIGURE_OPTIONS[@]}"
@@ -286,7 +290,7 @@ cd ../..
 
 mkdir win32
 cd win32
-tar xvf ../SDL2-2.32.10.tar.gz
+tar xvf ../SDL3-3.4.14.tar.gz
 tar xvf ../curl-8.8.0.tar.gz
 tar xvf ../libogg-1.3.5.tar.gz
 tar xvf ../opus-1.3.1.tar.gz
@@ -298,11 +302,13 @@ tar xvf ../ffmpeg-7.0.1.tar.gz
 tar xvf ../v4.3-stable.tar.gz
 tar xvf ../libpng-1.6.43.tar.gz
 
-cd SDL2-2.32.10
-./configure --host=i686-w64-mingw32 --enable-ime
-make -j4
-cp build/.libs/SDL2.dll build/.libs/libSDL2.dll.a ..
-i686-w64-mingw32-dlltool -v --export-all-symbols -D SDL2.dll -l ../SDL2.lib build/.libs/*.o
+cd SDL3-3.4.14
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_C_COMPILER=i686-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=i686-w64-mingw32-g++ -DCMAKE_RC_COMPILER=i686-w64-mingw32-windres -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF
+cmake --build build -j4
+cp build/SDL3.dll build/libSDL3.dll.a ..
+# import lib for MSVC; gendef is not packaged, mkdef.py is in ddnet-scripts
+i686-w64-mingw32-objdump -p build/SDL3.dll | python3 mkdef.py SDL3.dll > SDL3.def
+i686-w64-mingw32-dlltool -d SDL3.def -D SDL3.dll -l ../SDL3.lib
 
 cd ../curl-8.8.0
 ./configure --host=i686-w64-mingw32 --with-schannel --enable-shared "${CURL_CONFIGURE_OPTIONS[@]}"
@@ -390,7 +396,7 @@ tar xvf ../curl-8.8.0.tar.gz
 tar xvf ../libogg-1.3.5.tar.gz
 tar xvf ../opus-1.3.1.tar.gz
 tar xvf ../opusfile-0.12.tar.gz
-tar xvf ../SDL2-2.32.10.tar.gz
+tar xvf ../SDL3-3.4.14.tar.gz
 tar xvf ../freetype-2.13.2.tar.gz
 tar xvf ../x264-master.tar.bz2
 tar xvf ../ffmpeg-7.0.1.tar.gz
@@ -428,10 +434,19 @@ PKG_CONFIG=/usr/sbin/pkg-config DEPS_LIBS="-lopus -logg -L/home/deen/isos/ddnet/
 make -j4
 cp .libs/libopusfile.a ..
 
-cd ../SDL2-2.32.10
-./configure --enable-ime CFLAGS="-mmacosx-version-min=10.9" LDFLAGS="-mmacosx-version-min=10.9" --host=x86_64-apple-darwin20.1
-CFLAGS="-mmacosx-version-min=10.9" LDFLAGS="-mmacosx-version-min=10.9" make -j4
-cp build/.libs/libSDL2-2.0.0.dylib ../SDL2
+# SDL3's GameController code needs a newer SDK than the MacOSX11.0 one osxcross
+# defaults to, so point both the wrapper and cmake at MacOSX15.4.sdk. Its
+# @available checks lower to ___isPlatformVersionAtLeast from compiler-rt, which
+# is not installed in the system clang resource dir; CMAKE_C_STANDARD_LIBRARIES
+# appends it after the objects, where ld64 can actually resolve it.
+# own cross-macos-x86_64.cmake, copied into the source dir
+export OSXCROSS_SDK=/home/deen/git/osxcross/target/SDK/MacOSX15.4.sdk
+export OSXCROSS_SDKROOT=$OSXCROSS_SDK
+export OSXCROSS_SDK_VERSION=15.4
+cd ../SDL3-3.4.14
+cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=cross-macos-x86_64.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS="-mmacosx-version-min=10.15" -DCMAKE_SHARED_LINKER_FLAGS="-mmacosx-version-min=10.15" -DCMAKE_C_STANDARD_LIBRARIES="-L/home/deen/git/osxcross/build/compiler-rt/compiler-rt/build_x86_64/lib/darwin -lclang_rt.osx" -DSDL_FRAMEWORK=ON -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF -DSDL_HIDAPI_LIBUSB=OFF
+cmake --build build -j4
+cp -a build/SDL3.framework ..
 
 cd ../freetype-2.13.2
 ./configure CFLAGS="-mmacosx-version-min=10.9" --host=x86_64-apple-darwin20.1 --with-png=no --with-bzip2=no --with-zlib=no --with-harfbuzz=no
@@ -467,7 +482,7 @@ tar xvf ../curl-8.8.0.tar.gz
 tar xvf ../libogg-1.3.5.tar.gz
 tar xvf ../opus-1.3.1.tar.gz
 tar xvf ../opusfile-0.12.tar.gz
-tar xvf ../SDL2-2.32.10.tar.gz
+tar xvf ../SDL3-3.4.14.tar.gz
 tar xvf ../freetype-2.13.2.tar.gz
 tar xvf ../x264-master.tar.bz2
 tar xvf ../ffmpeg-7.0.1.tar.gz
@@ -500,10 +515,14 @@ PKG_CONFIG=/usr/sbin/pkg-config DEPS_LIBS="-lopus -logg -L/home/deen/isos/ddnet/
 make -j4
 cp .libs/libopusfile.a ..
 
-cd ../SDL2-2.32.10
-./configure --enable-ime CFLAGS="-mmacosx-version-min=10.9" LDFLAGS="-mmacosx-version-min=10.9" --host=aarch64-apple-darwin20.1
-CFLAGS="-mmacosx-version-min=10.9" LDFLAGS="-mmacosx-version-min=10.9" make -j4
-cp build/.libs/libSDL2-2.0.0.dylib ../SDL2
+# own cross-macos-arm64.cmake, copied into the source dir; see the x86_64 SDL3 notes
+export OSXCROSS_SDK=/home/deen/git/osxcross/target/SDK/MacOSX15.4.sdk
+export OSXCROSS_SDKROOT=$OSXCROSS_SDK
+export OSXCROSS_SDK_VERSION=15.4
+cd ../SDL3-3.4.14
+cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=cross-macos-arm64.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS="-mmacosx-version-min=10.15" -DCMAKE_SHARED_LINKER_FLAGS="-mmacosx-version-min=10.15" -DCMAKE_C_STANDARD_LIBRARIES="-L/home/deen/git/osxcross/build/compiler-rt/compiler-rt/build_arm64/lib/darwin -lclang_rt.osx" -DSDL_FRAMEWORK=ON -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF -DSDL_HIDAPI_LIBUSB=OFF
+cmake --build build -j4
+cp -a build/SDL3.framework ..
 
 cd ../freetype-2.13.2
 ./configure CFLAGS="-mmacosx-version-min=10.9" --host=aarch64-apple-darwin20.1 --with-png=no --with-bzip2=no --with-zlib=no --with-harfbuzz=no
@@ -533,8 +552,8 @@ make -j4
 cp .libs/libpng16.16.dylib ..
 
 # fix output paths in shared libs on macOS:
+# (SDL3's cmake framework build already sets @rpath/SDL3.framework/Versions/A/SDL3)
 otool -L $i
-install_name_tool -id @rpath/SDL2.framework/Versions/A/SDL2 lib64/SDL2.framework/Versions/A/SDL2
 install_name_tool -id @rpath/libpng16.16.dylib libpng16.16.dylib
 install_name_tool -id @rpath/libwebsockets.19.dylib libwebsockets.19.dylib
 install_name_tool -id @rpath/libfreetype.6.dylib libfreetype.6.dylib
@@ -553,10 +572,14 @@ install_name_tool -change /usr/local/lib/libavutil.59.dylib @rpath/libavutil.59.
 # create fat binaries for mac
 rm -rf libfat; mkdir libfat; for i in lib64/*.dylib; do lipo -create $i libarm64/${i:t} -output libfat/${i:t}; done
 mkdir libfat; for i in lib64/*.a; do lipo -create $i libarm64/${i:t} -output libfat/${i:t}; done
-cd sdl/mac; rm libfat/SDL2.framework/Versions/A/SDL2; lipo -create lib64/SDL2.framework/Versions/A/SDL2 libarm64/SDL2.framework/Versions/A/SDL2 -output libfat/SDL2.framework/Versions/A/SDL2
+cd sdl/mac; rm -rf libfat/SDL3.framework; cp -a lib64/SDL3.framework libfat/SDL3.framework; rm libfat/SDL3.framework/Versions/A/SDL3; lipo -create lib64/SDL3.framework/Versions/A/SDL3 libarm64/SDL3.framework/Versions/A/SDL3 -output libfat/SDL3.framework/Versions/A/SDL3
 
 # sign all arm64 and fat dylibs using codesign on macOS (until https://github.com/thefloweringash/sigtool/issues/8 is fixed, then we can automate it on Linux)
-for i in **/libarm64/*.dylib **/libfat/*.dylib sdl/mac/libarm64/SDL2.framework sdl/mac/libfat/SDL2.framework; do codesign -s - $i; done
+for i in **/libarm64/*.dylib **/libfat/*.dylib sdl/mac/libarm64/SDL3.framework sdl/mac/libfat/SDL3.framework; do codesign -s - $i; done
+
+# The SDL3 headers in ddnet-libs (sdl/include/<platform>/SDL3/) are just the
+# SDL3-x.y.z/include/ tree, the same one gen_libs.sh copies for android/webasm.
+# ddnet-libs/sdl/webasm and sdl/android (and sdl/java) come from that script.
 
 # The lws_config.h files collected above go into the per-platform ddnet-libs
 # include dirs (websockets/include/{windows,mac,linux}/lws_config.h, next to the
