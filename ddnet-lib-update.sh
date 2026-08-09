@@ -45,6 +45,80 @@ CURL_CONFIGURE_OPTIONS=(
 	--disable-mqtt
 )
 
+rustup target add x86_64-pc-windows-gnu i686-pc-windows-gnu x86_64-apple-darwin aarch64-apple-darwin
+mkdir -p zlib-rs-shim/src
+cd zlib-rs-shim
+cat > Cargo.toml <<'EOF'
+[package]
+name = "zlib-rs-shim"
+version = "0.0.1"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["staticlib"]
+path = "src/lib.rs"
+
+[dependencies]
+libz-rs-sys = { version = "=0.6.7", default-features = false, features = ["export-symbols", "c-allocator"] }
+
+[profile.release]
+opt-level = 3
+panic = "abort"
+strip = true
+EOF
+# no_std, so that nothing but the zlib API and libc ends up in libpng: with
+# default features the Rust std pulls its whole windows platform layer
+# (sockets, ntdll, ...) into the DLL.
+cat > src/lib.rs <<'EOF'
+//! Static archive exporting the zlib C API, implemented by zlib-rs.
+#![no_std]
+
+use core::alloc::{GlobalAlloc, Layout};
+
+use libz_rs_sys as _;
+
+unsafe extern "C" {
+    fn abort() -> !;
+}
+
+/// zlib-rs links the `alloc` crate, so a global allocator has to exist, but it
+/// never allocates through it: the `c-allocator` feature routes zlib-rs's own
+/// allocations to `malloc`, and libpng installs its own `zalloc`/`zfree` on
+/// every stream regardless. Abort instead of pretending to allocate.
+struct Unused;
+
+unsafe impl GlobalAlloc for Unused {
+    unsafe fn alloc(&self, _layout: Layout) -> *mut u8 {
+        unsafe { abort() }
+    }
+
+    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {
+        unsafe { abort() }
+    }
+}
+
+#[global_allocator]
+static ALLOCATOR: Unused = Unused;
+
+#[panic_handler]
+fn panic(_info: &core::panic::PanicInfo) -> ! {
+    unsafe { abort() }
+}
+
+/// The precompiled `core` rlib is built with `panic=unwind`, so its unwind
+/// tables reference this. We abort on panic, so it is never called.
+#[no_mangle]
+extern "C" fn rust_eh_personality() {}
+EOF
+for target in x86_64-pc-windows-gnu i686-pc-windows-gnu x86_64-apple-darwin aarch64-apple-darwin; do
+	cargo build --release --target $target
+	mkdir -p ../zlib-rs/$target/lib ../zlib-rs/$target/include
+	cp target/$target/release/libzlib_rs_shim.a ../zlib-rs/$target/lib/libz.a
+	cp ~/.cargo/registry/src/*/libz-rs-sys-0.6.7/include/zlib.h ~/.cargo/registry/src/*/libz-rs-sys-0.6.7/include/zconf.h ../zlib-rs/$target/include/
+done
+cd ..
+
 cd ../..
 chroot debian11 bash
 cd
@@ -278,7 +352,7 @@ x86_64-w64-mingw32-objdump -p bin/libwebsockets.dll | python3 mkdef.py libwebsoc
 x86_64-w64-mingw32-dlltool -d libwebsockets.def -D libwebsockets.dll -l ../websockets.lib
 
 cd ../libpng-1.6.43
-CFLAGS="-I/usr/x86_64-w64-mingw32/include" LDFLAGS="-L/usr/x86_64-w64-mingw32/lib" ./configure --host=x86_64-w64-mingw32
+CPPFLAGS="-I/root/zlib-rs/x86_64-pc-windows-gnu/include" LDFLAGS="-L/root/zlib-rs/x86_64-pc-windows-gnu/lib" ./configure --host=x86_64-w64-mingw32
 make -j4
 cp .libs/libpng16-16.dll ..
 x86_64-w64-mingw32-dlltool -v --export-all-symbols -D libpng16-16.dll -l ../libpng16-16.lib **/*.o
@@ -380,7 +454,7 @@ i686-w64-mingw32-objdump -p bin/libwebsockets.dll | python3 mkdef.py libwebsocke
 i686-w64-mingw32-dlltool -d libwebsockets.def -D libwebsockets.dll -l ../websockets.lib
 
 cd ../libpng-1.6.43
-CFLAGS="-I/usr/i686-w64-mingw32/include" LDFLAGS="-L/usr/i686-w64-mingw32/lib" ./configure --host=i686-w64-mingw32
+CPPFLAGS="-I/root/zlib-rs/i686-pc-windows-gnu/include" LDFLAGS="-L/root/zlib-rs/i686-pc-windows-gnu/lib" ./configure --host=i686-w64-mingw32
 make -j4
 cp .libs/libpng16-16.dll ..
 i686-w64-mingw32-dlltool -v --export-all-symbols -D libpng16-16.dll -l ../libpng16-16.lib **/*.o
@@ -471,7 +545,9 @@ cp lib/libwebsockets.19.dylib ..
 cp lws_config.h ..
 
 cd ../libpng-1.6.43
-./configure --host=x86_64-apple-darwin20.1
+# CC= because libpng's configure only probes $host-gcc, which osxcross does not
+# ship, and then silently falls back to the host gcc
+CC=x86_64-apple-darwin20.1-cc CPPFLAGS="-I/root/zlib-rs/x86_64-apple-darwin/include" LDFLAGS="-L/root/zlib-rs/x86_64-apple-darwin/lib" ./configure --host=x86_64-apple-darwin20.1
 make -j4
 cp .libs/libpng16.16.dylib ..
 
@@ -547,7 +623,7 @@ cp lib/libwebsockets.19.dylib ..
 cp lws_config.h ..
 
 cd ../libpng-1.6.43
-./configure --host=aarch64-apple-darwin20.1
+CC=aarch64-apple-darwin20.1-cc CPPFLAGS="-I/root/zlib-rs/aarch64-apple-darwin/include" LDFLAGS="-L/root/zlib-rs/aarch64-apple-darwin/lib" ./configure --host=aarch64-apple-darwin20.1
 make -j4
 cp .libs/libpng16.16.dylib ..
 
@@ -585,3 +661,12 @@ for i in **/libarm64/*.dylib **/libfat/*.dylib sdl/mac/libarm64/SDL3.framework s
 # include dirs (websockets/include/{windows,mac,linux}/lws_config.h, next to the
 # lws headers); lws only generates it per build. The windows file combines the
 # x86/x64 and arm64 configs behind an architecture #if.
+
+# Windows arm64 is not built above; it uses the llvm-mingw docker lane from
+# ddnet#8800, now release/docker in this repo. It builds the same zlib-rs shim,
+# so its libpng uses zlib-rs too:
+#   cd release/docker
+#   docker build --platform linux/amd64 -f Dockerfile.libs-winarm64 -t ddnet-libs-winarm64 .
+#   docker run --rm --platform linux/amd64 -v ./output:/output ddnet-libs-winarm64
+# Dockerfile.libs-windows (PLATFORM=64/32) and Dockerfile.libs-linux are docker
+# equivalents of the chroot sections above.

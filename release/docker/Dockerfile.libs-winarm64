@@ -24,6 +24,12 @@ RUN cd /tmp && \
     tar xf "llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-20.04-x86_64.tar.xz" -C /opt && \
     rm "llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-20.04-x86_64.tar.xz"
 ENV PATH="${TOOLCHAIN_DIR}/bin:${PATH}"
+
+# Rust, for the zlib-rs static archive that libpng links against
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+ENV PATH="/root/.cargo/bin:${PATH}"
+RUN rustup target add aarch64-pc-windows-gnullvm
+
 ENV CC=aarch64-w64-mingw32-clang
 ENV CXX=aarch64-w64-mingw32-clang++
 ENV RC=aarch64-w64-mingw32-windres

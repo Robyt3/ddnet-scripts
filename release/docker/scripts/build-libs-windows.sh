@@ -21,6 +21,7 @@ FFMPEG_VERSION=7.0.1
 LWS_VERSION=4.3-stable
 LIBPNG_VERSION=1.6.43
 ZLIB_VERSION=1.3.1
+ZLIB_RS_VERSION=0.6.7
 
 if [ "$PLATFORM" = "64" ]; then
   HOST=x86_64-w64-mingw32
@@ -28,12 +29,14 @@ if [ "$PLATFORM" = "64" ]; then
   FFMPEG_ARCH="--arch=x86_64"
   PREFIX=/usr/x86_64-w64-mingw32
   LWS_TOOLCHAIN=contrib/cross-w64.cmake
+  RUST_TARGET=x86_64-pc-windows-gnu
 else
   HOST=i686-w64-mingw32
   LIB_SUFFIX="lib32"
   FFMPEG_ARCH="--arch=i686"
   PREFIX=/usr/i686-w64-mingw32
   LWS_TOOLCHAIN=contrib/cross-w32.cmake
+  RUST_TARGET=i686-pc-windows-gnu
 fi
 
 CURL_CONFIGURE_OPTIONS=(
@@ -187,9 +190,83 @@ cmake --build build --parallel
 cp build/libzlibstatic.a ${PREFIX}/lib/libz.a
 cp zlib.h build/zconf.h ${PREFIX}/include/
 
+# --- zlib-rs (static, for libpng only) ---
+# libpng links this instead of the C zlib above, so it decompresses with
+# zlib-rs like the rest of DDNet does. The C zlib stays in the sysroot for the
+# other consumers. no_std, or Rust's std pulls its whole windows platform layer
+# (sockets, ntdll, ...) into libpng.
+mkdir -p /build/zlib-rs-shim/src
+cd /build/zlib-rs-shim
+cat > Cargo.toml <<EOF
+[package]
+name = "zlib-rs-shim"
+version = "0.0.1"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["staticlib"]
+path = "src/lib.rs"
+
+[dependencies]
+libz-rs-sys = { version = "=${ZLIB_RS_VERSION}", default-features = false, features = ["export-symbols", "c-allocator"] }
+
+[profile.release]
+opt-level = 3
+panic = "abort"
+strip = true
+EOF
+cat > src/lib.rs <<'EOF'
+//! Static archive exporting the zlib C API, implemented by zlib-rs.
+#![no_std]
+
+use core::alloc::{GlobalAlloc, Layout};
+
+use libz_rs_sys as _;
+
+unsafe extern "C" {
+    fn abort() -> !;
+}
+
+/// zlib-rs links the `alloc` crate, so a global allocator has to exist, but it
+/// never allocates through it: the `c-allocator` feature routes zlib-rs's own
+/// allocations to `malloc`, and libpng installs its own `zalloc`/`zfree` on
+/// every stream regardless. Abort instead of pretending to allocate.
+struct Unused;
+
+unsafe impl GlobalAlloc for Unused {
+    unsafe fn alloc(&self, _layout: Layout) -> *mut u8 {
+        unsafe { abort() }
+    }
+
+    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {
+        unsafe { abort() }
+    }
+}
+
+#[global_allocator]
+static ALLOCATOR: Unused = Unused;
+
+#[panic_handler]
+fn panic(_info: &core::panic::PanicInfo) -> ! {
+    unsafe { abort() }
+}
+
+/// The precompiled `core` rlib is built with `panic=unwind`, so its unwind
+/// tables reference this. We abort on panic, so it is never called.
+#[no_mangle]
+extern "C" fn rust_eh_personality() {}
+EOF
+cargo build --release --target ${RUST_TARGET}
+mkdir -p /build/zlib-rs/lib /build/zlib-rs/include
+cp target/${RUST_TARGET}/release/libzlib_rs_shim.a /build/zlib-rs/lib/libz.a
+cp "$HOME"/.cargo/registry/src/*/libz-rs-sys-${ZLIB_RS_VERSION}/include/zlib.h \
+   "$HOME"/.cargo/registry/src/*/libz-rs-sys-${ZLIB_RS_VERSION}/include/zconf.h \
+   /build/zlib-rs/include/
+
 # --- libpng ---
 cd /build/src/libpng-${LIBPNG_VERSION}
-CFLAGS="-I${PREFIX}/include" LDFLAGS="-L${PREFIX}/lib" ./configure --host=$HOST
+CPPFLAGS="-I/build/zlib-rs/include" LDFLAGS="-L/build/zlib-rs/lib" ./configure --host=$HOST
 make -j"$(nproc)"
 cp .libs/libpng16-16.dll /build/src/
 ${HOST}-dlltool -v --export-all-symbols -D libpng16-16.dll -l /build/src/libpng16-16.lib .libs/*.o
