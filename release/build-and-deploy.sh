@@ -61,6 +61,8 @@ elif [ "$1" = "rc" ]; then
   export UPDATE_FLAGS_MACOS="-DINFORM_UPDATE=OFF"
   export VERSION=$2
   ./build.sh $VERSION &> builds/DDNet-$VERSION.log || { echo "build.sh failed, see builds/DDNet-$VERSION.log"; exit 1 }
+
+  rsync -avP --delay-updates --delete-delay ddnet-source/build-emscripten/pack_DDNet-$VERSION-Emscripten_tar_xz/DDNet-$VERSION-Emscripten/ ddnet:/var/www-client/$VERSION
 elif [ "$1" = "release" ]; then
   VERSION=$2
   ./build.sh $VERSION &> builds/DDNet-$VERSION.log || { echo "build.sh failed, see builds/DDNet-$VERSION.log"; exit 1 }
